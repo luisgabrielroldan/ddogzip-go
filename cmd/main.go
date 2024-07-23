@@ -11,16 +11,11 @@ import (
 	"ddogzip/pkg/server"
 )
 
-type TraceID struct {
-	High uint64
-	Low  uint64
-}
-
 func main() {
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 
 	logOutput := log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339})
-	log.Logger = logOutput.With().Caller().Logger()
+	log.Logger = logOutput.With().Logger()
 
 	config := config.LoadConfig()
 

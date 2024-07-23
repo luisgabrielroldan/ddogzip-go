@@ -7,6 +7,12 @@ clean:
 	go clean
 	rm -f ./bin/*
 
+test:
+	go test ./...
+
+run:
+	go run cmd/main.go
+
 image:
 	docker build -t ddogzip .
 

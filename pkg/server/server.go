@@ -6,22 +6,53 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/openzipkin/zipkin-go/model"
+	"github.com/openzipkin/zipkin-go/reporter"
 	"github.com/rs/zerolog/log"
 
 	"ddogzip/pkg/config"
 )
 
 type Server struct {
-	config *config.AppConfig
+	config         *config.AppConfig
+	zipkinReporter reporter.Reporter
 }
 
-func makeAgentHandler() *http.ServeMux {
+func NewServer(config *config.AppConfig) *Server {
+	return &Server{
+		config:         config,
+		zipkinReporter: NewZipkinReporter(config),
+	}
+}
+
+func (s *Server) Start() {
+	config := s.config
+
+	log.Info().Msgf("Server listening on %s", config.ListenAddr)
+
+	err := http.ListenAndServe(s.config.ListenAddr, makeAgentHandler(s))
+
+	if errors.Is(err, http.ErrServerClosed) {
+		log.Info().Msg("Server closed")
+	} else if err != nil {
+		log.Error().Err(err).Msg("An error occurred")
+		os.Exit(1)
+	}
+}
+
+func (s *Server) reportSpans(spans []*model.SpanModel) {
+	for _, span := range spans {
+		s.zipkinReporter.Send(*span)
+	}
+}
+
+func makeAgentHandler(server *Server) *http.ServeMux {
 	mux := http.NewServeMux()
-	log.Info().Msg("Creating new agent handler")
 
 	mux.HandleFunc("/{version}/traces", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut {
 			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
 		}
 
 		body, err := io.ReadAll(r.Body)
@@ -32,7 +63,8 @@ func makeAgentHandler() *http.ServeMux {
 			return
 		}
 
-		decoded, err := decodeDDTraceData(body)
+		version := r.PathValue("version")
+		decoded, err := decodeDDTraceData(version, body)
 
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to decode trace data")
@@ -44,7 +76,7 @@ func makeAgentHandler() *http.ServeMux {
 
 		log.Info().Msg("New trace data received")
 
-		zipkinSendSpans(zipkinSpans)
+		server.reportSpans(zipkinSpans)
 
 		log.Info().Msgf("Sent %d spans to Zipkin", len(zipkinSpans))
 
@@ -52,27 +84,4 @@ func makeAgentHandler() *http.ServeMux {
 	})
 
 	return mux
-}
-
-func (s *Server) Start() {
-	config := s.config
-
-	log.Info().Msgf("Server listening on %s", config.ListenAddr)
-
-	zipkinInitReporter(config)
-
-	err := http.ListenAndServe(s.config.ListenAddr, makeAgentHandler())
-
-	if errors.Is(err, http.ErrServerClosed) {
-		log.Info().Msg("Server closed")
-	} else if err != nil {
-		log.Error().Err(err).Msg("An error occurred")
-		os.Exit(1)
-	}
-}
-
-func NewServer(config *config.AppConfig) *Server {
-	return &Server{
-		config: config,
-	}
 }
