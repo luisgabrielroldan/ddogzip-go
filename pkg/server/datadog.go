@@ -30,14 +30,15 @@ type DDTrace []DDSpan
 
 func decodeDDTraceData(version string, payload []byte) (*[]DDTrace, error) {
 	switch version {
-	case "v0.3":
-		return decodeDDTraceDataV3(payload)
+	case "v0.3", "v0.4", "v0.5":
+		// v0.3, v0.4, and v0.5 all use the same msgpack encoding for trace data
+		return decodeDDTraceDataMsgpack(payload)
 	default:
 		return nil, fmt.Errorf("unsupported protocol version: %s", version)
 	}
 }
 
-func decodeDDTraceDataV3(payload []byte) (*[]DDTrace, error) {
+func decodeDDTraceDataMsgpack(payload []byte) (*[]DDTrace, error) {
 	var data []DDTrace
 	if err := msgpack.Unmarshal(payload, &data); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal payload: %w", err)
