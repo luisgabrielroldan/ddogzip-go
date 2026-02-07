@@ -1,9 +1,16 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version_bump:
+        description: 'Version bump type'
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
 
 permissions:
   contents: write
@@ -12,7 +19,63 @@ env:
   DOCKER_IMAGE: luisgabrielroldan/ddogzip
 
 jobs:
+  create-tag:
+    runs-on: ubuntu-latest
+    outputs:
+      new_version: ${{ steps.bump.outputs.new_version }}
+      new_tag: ${{ steps.bump.outputs.new_tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get latest tag
+        id: latest
+        run: |
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "latest_tag=${LATEST_TAG}" >> $GITHUB_OUTPUT
+          echo "Latest tag: ${LATEST_TAG}"
+
+      - name: Bump version
+        id: bump
+        run: |
+          LATEST_TAG=${{ steps.latest.outputs.latest_tag }}
+          VERSION=${LATEST_TAG#v}
+          
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+          
+          case "${{ inputs.version_bump }}" in
+            major)
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+              ;;
+            minor)
+              MINOR=$((MINOR + 1))
+              PATCH=0
+              ;;
+            patch)
+              PATCH=$((PATCH + 1))
+              ;;
+          esac
+          
+          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          NEW_TAG="v${NEW_VERSION}"
+          
+          echo "new_version=${NEW_VERSION}" >> $GITHUB_OUTPUT
+          echo "new_tag=${NEW_TAG}" >> $GITHUB_OUTPUT
+          echo "Bumping from ${LATEST_TAG} to ${NEW_TAG} (${{ inputs.version_bump }})"
+
+      - name: Create and push tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a ${{ steps.bump.outputs.new_tag }} -m "Release ${{ steps.bump.outputs.new_tag }}"
+          git push origin ${{ steps.bump.outputs.new_tag }}
+
   test:
+    needs: create-tag
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -33,7 +96,7 @@ jobs:
         run: make lint
 
   build-binaries:
-    needs: test
+    needs: [create-tag, test]
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -77,7 +140,7 @@ jobs:
           path: ddogzip-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
 
   docker-publish:
-    needs: test
+    needs: [create-tag, test]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -96,9 +159,8 @@ jobs:
           images: ${{ env.DOCKER_IMAGE }}
           tags: |
             type=raw,value=latest
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
+            type=raw,value=${{ needs.create-tag.outputs.new_version }}
+            type=raw,value=${{ needs.create-tag.outputs.new_version | split('.') | slice(0,2) | join('.') }}
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -118,11 +180,13 @@ jobs:
           cache-to: type=gha,mode=max
 
   create-release:
-    needs: [build-binaries, docker-publish]
+    needs: [create-tag, build-binaries, docker-publish]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -137,5 +201,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.create-tag.outputs.new_tag }}
+          name: Release ${{ needs.create-tag.outputs.new_tag }}
           generate_release_notes: true
           files: release/*
