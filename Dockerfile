@@ -1,25 +1,23 @@
-FROM golang:1.22-alpine as builder
+FROM golang:1.22-alpine AS builder
 
 WORKDIR /app
 
-ENV GO111MODULE=on \
-    CGO_ENABLED=0 \
-    GOOS=linux
+ENV CGO_ENABLED=0 \
+    GOOS=linux \
+    GOARCH=amd64
 
-COPY go.mod .
-COPY go.sum .
+COPY go.mod go.sum ./
 
 RUN go mod download
 
 COPY . .
 
-RUN go build -o ddogzip cmd/main.go
+RUN go build -ldflags="-s -w" -o ddogzip cmd/main.go
 
 
-FROM alpine:latest
+FROM gcr.io/distroless/static-debian12:nonroot
 
-RUN apk --no-cache add ca-certificates mailcap && addgroup -S app && adduser -S app -G app
-USER app
 WORKDIR /app
-COPY --from=builder /app/ddogzip .
+COPY --from=builder --chown=nonroot:nonroot /app/ddogzip .
+
 ENTRYPOINT ["./ddogzip"]
