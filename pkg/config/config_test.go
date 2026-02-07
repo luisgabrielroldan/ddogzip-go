@@ -1,16 +1,15 @@
 package config
 
 import (
-	"os"
 	"testing"
 )
 
 func TestLoadConfig(t *testing.T) {
-	// Set up environment variables
-	os.Setenv("LISTEN_ADDR", ":8080")
-	os.Setenv("ZIPKIN_PROTOCOL", "https")
-	os.Setenv("ZIPKIN_HOST", "zipkin.io")
-	os.Setenv("ZIPKIN_PORT", "9412")
+	// Set up environment variables using t.Setenv (automatically cleaned up)
+	t.Setenv("LISTEN_ADDR", ":8080")
+	t.Setenv("ZIPKIN_PROTOCOL", "https")
+	t.Setenv("ZIPKIN_HOST", "zipkin.io")
+	t.Setenv("ZIPKIN_PORT", "9412")
 
 	// Load the config
 	config := LoadConfig()
@@ -28,15 +27,11 @@ func TestLoadConfig(t *testing.T) {
 	if config.ZipkinPort != "9412" {
 		t.Errorf("Expected ZipkinPort to be '9412', but got '%s'", config.ZipkinPort)
 	}
+}
 
-	// Clean up environment variables
-	os.Unsetenv("LISTEN_ADDR")
-	os.Unsetenv("ZIPKIN_PROTOCOL")
-	os.Unsetenv("ZIPKIN_HOST")
-	os.Unsetenv("ZIPKIN_PORT")
-
-	// Load the config again to check the default values
-	config = LoadConfig()
+func TestLoadConfigDefaults(t *testing.T) {
+	// Load the config without setting environment variables to check defaults
+	config := LoadConfig()
 
 	// Check if the values match the default values
 	if config.ListenAddr != ":8126" {

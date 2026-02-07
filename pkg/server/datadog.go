@@ -90,6 +90,20 @@ func translateDDSpanToZipkinSpan(span *DDSpan) *model.SpanModel {
 		if errorMessage, ok := span.Meta["error.msg"].(string); ok {
 			zSpan.Err = errors.New(errorMessage)
 		}
+
+		// Capture error.type if present
+		if errorType, ok := span.Meta["error.type"].(string); ok {
+			zSpan.Tags["error.type"] = errorType
+		}
+
+		// Capture error.stack if present (truncate if too long)
+		if errorStack, ok := span.Meta["error.stack"].(string); ok {
+			const maxStackLength = 10000 // Limit stack trace length
+			if len(errorStack) > maxStackLength {
+				errorStack = errorStack[:maxStackLength] + "... (truncated)"
+			}
+			zSpan.Tags["error.stack"] = errorStack
+		}
 	}
 
 	return &zSpan
