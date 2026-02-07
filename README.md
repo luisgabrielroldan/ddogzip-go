@@ -1,8 +1,11 @@
-# DDogZip (Go Version)
+# DDogZip
 
-Re-implementation of [DDogZip](https://github.com/luisgabrielroldan/ddogzip) for learning Go.
+[![Docker Image](https://img.shields.io/docker/v/luisgabrielroldan/ddogzip?label=Docker%20Hub)](https://hub.docker.com/r/luisgabrielroldan/ddogzip)
+[![Docker Pulls](https://img.shields.io/docker/pulls/luisgabrielroldan/ddogzip)](https://hub.docker.com/r/luisgabrielroldan/ddogzip)
 
 DDogZip is a proxy server that receives traces from Datadog-instrumented applications and forwards them to a Zipkin collector. This allows you to use Datadog's APM instrumentation while sending trace data to Zipkin for visualization and analysis.
+
+This tool is ideal for local development environments where you want to debug tracing without sending data to Datadog's infrastructure.
 
 ## Features
 
@@ -12,6 +15,7 @@ DDogZip is a proxy server that receives traces from Datadog-instrumented applica
 - Graceful shutdown with span flushing
 - Health check endpoint for container orchestration
 - Enhanced error capture (error.msg, error.type, error.stack)
+- Multi-architecture Docker images (amd64, arm64)
 
 ## Configuration
 
@@ -25,6 +29,15 @@ DDogZip can be configured using environment variables:
 | `ZIPKIN_PORT` | `9411` | Zipkin collector port |
 
 ## Usage
+
+### Docker (Recommended)
+
+```bash
+docker run -p 8126:8126 \
+  -e ZIPKIN_HOST=zipkin \
+  -e ZIPKIN_PORT=9411 \
+  luisgabrielroldan/ddogzip
+```
 
 ### Running Locally
 
@@ -43,17 +56,14 @@ make build
 ./bin/ddogzip
 ```
 
-### Docker
+### Building Docker Image Locally
 
 ```bash
-# Build image
+# Build for current platform
 make image
 
-# Run container
-docker run -p 8126:8126 \
-  -e ZIPKIN_HOST=zipkin \
-  -e ZIPKIN_PORT=9411 \
-  ddogzip
+# Build multi-arch image
+make image-multiarch
 ```
 
 ## Docker Compose Example
@@ -72,7 +82,7 @@ services:
       - STORAGE_TYPE=mem
 
   ddogzip:
-    build: .
+    image: luisgabrielroldan/ddogzip:latest
     ports:
       - "8126:8126"
     environment:
@@ -122,5 +132,5 @@ make clean
 
 ## License
 
-See the original [DDogZip](https://github.com/luisgabrielroldan/ddogzip) repository for license information.
+MIT License
 
