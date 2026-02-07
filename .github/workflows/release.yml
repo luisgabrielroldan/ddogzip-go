@@ -20,10 +20,12 @@ env:
 
 jobs:
   create-tag:
+    name: Create Version Tag
     runs-on: ubuntu-latest
     outputs:
       new_version: ${{ steps.bump.outputs.new_version }}
       new_tag: ${{ steps.bump.outputs.new_tag }}
+      major_minor: ${{ steps.bump.outputs.major_minor }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -62,9 +64,11 @@ jobs:
           
           NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
           NEW_TAG="v${NEW_VERSION}"
+          MAJOR_MINOR="${MAJOR}.${MINOR}"
           
           echo "new_version=${NEW_VERSION}" >> $GITHUB_OUTPUT
           echo "new_tag=${NEW_TAG}" >> $GITHUB_OUTPUT
+          echo "major_minor=${MAJOR_MINOR}" >> $GITHUB_OUTPUT
           echo "Bumping from ${LATEST_TAG} to ${NEW_TAG} (${{ inputs.version_bump }})"
 
       - name: Create and push tag
@@ -75,6 +79,7 @@ jobs:
           git push origin ${{ steps.bump.outputs.new_tag }}
 
   test:
+    name: Run Tests
     needs: create-tag
     runs-on: ubuntu-latest
     steps:
@@ -96,6 +101,7 @@ jobs:
         run: make lint
 
   build-binaries:
+    name: Build Binary (${{ matrix.goos }}/${{ matrix.goarch }})
     needs: [create-tag, test]
     runs-on: ubuntu-latest
     strategy:
@@ -140,6 +146,7 @@ jobs:
           path: ddogzip-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
 
   docker-publish:
+    name: Publish Docker Image
     needs: [create-tag, test]
     runs-on: ubuntu-latest
     steps:
@@ -160,7 +167,7 @@ jobs:
           tags: |
             type=raw,value=latest
             type=raw,value=${{ needs.create-tag.outputs.new_version }}
-            type=raw,value=${{ needs.create-tag.outputs.new_version | split('.') | slice(0,2) | join('.') }}
+            type=raw,value=${{ needs.create-tag.outputs.major_minor }}
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -180,6 +187,7 @@ jobs:
           cache-to: type=gha,mode=max
 
   create-release:
+    name: Create GitHub Release
     needs: [create-tag, build-binaries, docker-publish]
     runs-on: ubuntu-latest
     steps:
